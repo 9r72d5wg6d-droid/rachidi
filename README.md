@@ -126,19 +126,195 @@ L'architecture du projet est décrite en détail dans [docs/architecture.md](doc
 ### Frontend
 - HTML5, CSS3, JavaScript
 - Design system défini dans [docs/design-system.md](docs/design-system.md)
+- Module scanner QR avec abstraction pour caméra et USB
 
 ### Backend
-- Framework à déterminer (section prévue dans architecture.md)
+- Framework à déterminer (Node.js/Express, Python/Flask, Java/Spring Boot)
+- Architecture REST
+- Middleware d'authentification et autorisation
 
 ### Base de Données
-- SGBD à déterminer (section prévue dans architecture.md)
+- SGBD à déterminer (PostgreSQL recommandé)
 - Structure définie dans [docs/database.md](docs/database.md)
+- Migrations et seeds préparées
 
 ### Scanner
-- Abstraction pour intégration ultérieure de :
-  - Caméra
+- Abstraction pour intégration de :
+  - Caméra (WebRTC)
   - Scanner QR USB
   - Autres périphériques compatibles
+
+## Structure du Projet
+
+```
+labo_ai/
+├── .github/                  # Configuration GitHub
+│   ├── ISSUE_TEMPLATE/       # Templates d'Issues
+│   └── pull_request_template.md
+├── docs/                     # Documentation complète
+│   ├── cahier-des-charges.md
+│   ├── besoins.md
+│   ├── use-cases.md
+│   ├── architecture.md
+│   ├── database.md
+│   ├── design-system.md
+│   ├── business-rules.md
+│   ├── workflows.md
+│   ├── roadmap.md
+│   ├── testing-strategy.md
+│   └── github-issues.md
+├── frontend/                 # Application frontend
+│   ├── assets/
+│   │   ├── css/
+│   │   │   ├── main.css              # Styles globaux (design system)
+│   │   │   └── components/
+│   │   ├── js/
+│   │   │   ├── main.js               # Point d'entrée
+│   │   │   ├── api/                  # Appels API
+│   │   │   ├── components/           # Composants réutilisables
+│   │   │   ├── pages/                # Logique des pages
+│   │   │   ├── scanner/              # Module scanner QR
+│   │   │   │   ├── scanner.js        # Interface abstraite
+│   │   │   │   ├── camera.js         # Implémentation caméra
+│   │   │   │   ├── usb.js            # Implémentation USB
+│   │   │   │   ├── validator.js      # Validation QR
+│   │   │   │   └── workflow.js       # Workflow de scan
+│   │   │   └── utils/                # Utilitaires
+│   │   └── images/
+│   ├── pages/
+│   │   ├── auth/
+│   │   │   └── login.html
+│   │   ├── agent/                    # Pages agents
+│   │   │   ├── dashboard.html
+│   │   │   ├── scanner.html
+│   │   │   ├── session.html
+│   │   │   ├── people.html
+│   │   │   ├── computers.html
+│   │   │   ├── history.html
+│   │   │   └── reservations.html
+│   │   └── admin/                    # Pages administrateurs
+│   │       ├── dashboard.html
+│   │       ├── students.html
+│   │       ├── professors.html
+│   │       ├── agents.html
+│   │       ├── faculties.html
+│   │       ├── promotions.html
+│   │       ├── cards.html
+│   │       ├── computers.html
+│   │       ├── rooms.html
+│   │       ├── reservations.html
+│   │       ├── sessions.html
+│   │       ├── history.html
+│   │       └── settings.html
+│   ├── index.html
+│   └── README.md
+├── backend/                  # Application backend
+│   ├── config/               # Configuration
+│   │   └── database.js       # Configuration base de données
+│   ├── controllers/          # Contrôleurs API
+│   │   └── authController.js # Contrôleur authentification
+│   ├── models/               # Modèles de données
+│   │   └── User.js           # Modèle utilisateur
+│   ├── routes/               # Routes API
+│   │   └── auth.js           # Routes authentification
+│   ├── services/             # Logique métier
+│   ├── middleware/           # Middleware
+│   ├── utils/                # Utilitaires
+│   └── tests/                # Tests backend
+├── db/                       # Base de données
+│   ├── migrations/           # Scripts de migration
+│   │   └── 001_initial_schema.sql  # Schéma initial
+│   ├── seeds/                # Données de test
+│   ├── schemas/              # Schémas de référence
+│   └── README.md
+├── README.md                 # Documentation principale
+└── .gitignore
+```
+
+## Installation
+
+### Prérequis
+
+- Node.js (si choix Node.js) ou Python (si choix Python) ou Java (si choix Java)
+- PostgreSQL (recommandé) ou MySQL
+- Git
+
+### Étapes d'installation
+
+1. Cloner le dépôt
+```bash
+git clone https://github.com/votre-username/labaccess.git
+cd labaccess
+```
+
+2. Configurer la base de données
+```bash
+# Créer la base de données
+psql -U postgres -c "CREATE DATABASE labaccess;"
+
+# Exécuter les migrations
+psql -U postgres -d labaccess -f db/migrations/001_initial_schema.sql
+```
+
+3. Configurer les variables d'environnement
+```bash
+# Créer un fichier .env
+cp .env.example .env
+# Éditer .env avec vos configurations
+```
+
+4. Installer les dépendances (selon le choix de technologie)
+```bash
+# Pour Node.js
+npm install
+
+# Pour Python
+pip install -r requirements.txt
+
+# Pour Java
+mvn install
+```
+
+5. Démarrer l'application
+```bash
+# Pour Node.js
+npm start
+
+# Pour Python
+python app.py
+
+# Pour Java
+mvn spring-boot:run
+```
+
+## Développement
+
+### Frontend
+
+Le frontend utilise HTML5, CSS3 et JavaScript vanilla. Le design system est défini dans `frontend/assets/css/main.css`.
+
+Pour commencer le développement frontend :
+1. Ouvrir `frontend/pages/auth/login.html` dans un navigateur
+2. Suivre le design system dans `docs/design-system.md`
+3. Utiliser les composants dans `frontend/assets/js/components/`
+
+### Backend
+
+Le backend utilise une architecture REST avec des contrôleurs, modèles et services.
+
+Pour commencer le développement backend :
+1. Choisir la technologie (Node.js, Python, Java)
+2. Compléter les modèles dans `backend/models/`
+3. Compléter les contrôleurs dans `backend/controllers/`
+4. Définir les routes dans `backend/routes/`
+
+### Module Scanner
+
+Le module scanner est abstrait pour supporter différents périphériques :
+- Caméra via WebRTC
+- Scanner USB via événements clavier
+
+Voir `frontend/assets/js/scanner/README.md` pour plus de détails.
 
 ## Technologies Prévues
 
@@ -243,22 +419,27 @@ Pour contribuer au projet :
 
 ## GitHub Issues
 
-Les Issues sont organisées en phases :
+Le projet est organisé en **15 Issues** principales regroupées par modules. Voir [docs/github-issues.md](docs/github-issues.md) pour le détail complet.
 
-- **Phase 0** - Organisation
-- **Phase 1** - Authentification
-- **Phase 2** - Gestion des personnes
-- **Phase 3** - Cartes
-- **Phase 4** - Scanner
-- **Phase 5** - Sessions
-- **Phase 6** - Ordinateurs
-- **Phase 7** - Professeurs
-- **Phase 8** - Dashboard
-- **Phase 9** - Historique
-- **Phase 10** - Tests
-- **Phase 11** - Qualité
+### Liste des Issues
 
-Chaque Issue suit le template défini dans `.github/ISSUE_TEMPLATE/`.
+1. **Initialisation et Configuration du Projet** - Dépôt Git, documentation, templates
+2. **Authentification et Gestion des Utilisateurs** - Login, rôles, permissions
+3. **Gestion des Personnes** - Étudiants, professeurs, agents, facultés, promotions
+4. **Gestion des Cartes et QR Code** - CRUD cartes, génération QR, validation
+5. **Scanner QR Code et Identification** - Interface scanner, intégration backend
+6. **Gestion des Sessions** - Création, détection, terminaison, calcul durée
+7. **Gestion des Salles et Ordinateurs** - CRUD, états, attribution, libération
+8. **Workflow Professeur et Réservations** - Options professeur, réservations
+9. **Dashboards** - Dashboard agent et administrateur, statistiques
+10. **Historique et Rapports** - Historique sessions, filtres, rapports
+11. **Tests Complets** - Tests unitaires, intégration, E2E, performance
+12. **Responsive Design et Accessibilité** - Mobile/tablette/desktop, WCAG AA
+13. **Gestion des Erreurs et Notifications** - Messages d'erreur, notifications
+14. **Optimisation des Performances** - Requêtes, cache, frontend, pagination
+15. **Documentation Finale et Release** - Documentation utilisateur, guide déploiement
+
+Chaque Issue suit le template défini dans `.github/ISSUE_TEMPLATE/task.md`.
 
 ## Labels
 
@@ -280,17 +461,14 @@ Chaque Issue suit le template défini dans `.github/ISSUE_TEMPLATE/`.
 
 ## Milestones
 
-- **MVP** - Minimum Viable Product
-- **Authentication** - Authentification complète
-- **People Management** - Gestion des personnes
-- **QR Access** - Accès par QR Code
-- **Sessions** - Gestion des sessions
-- **Computer Management** - Gestion des ordinateurs
-- **Reservations** - Réservations
-- **Dashboard** - Dashboards
-- **History** - Historique
-- **Testing** - Tests complets
-- **Release 1.0** - Version 1.0
+Les milestones sont organisées pour suivre le développement du projet :
+
+- **Milestone 1 : Fondation** (Issues #1-#3) - Initialisation, authentification, gestion des personnes
+- **Milestone 2 : Accès QR** (Issues #4-#6) - Cartes, scanner, sessions
+- **Milestone 3 : Ressources** (Issues #7-#8) - Salles/ordinateurs, réservations
+- **Milestone 4 : Interface** (Issues #9-#10) - Dashboards, historique
+- **Milestone 5 : Qualité** (Issues #11-#14) - Tests, responsive, erreurs, performance
+- **Milestone 6 : Release 1.0** (Issue #15) - Documentation finale et release
 
 ## Sécurité
 
