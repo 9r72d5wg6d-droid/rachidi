@@ -231,6 +231,40 @@ labo_ai/
 └── .gitignore
 ```
 
+## MVP exécutable
+
+Le projet inclut maintenant une version MVP autonome, utilisable sans installer de dépendance tierce ni configurer PostgreSQL. Elle couvre :
+
+- authentification administrateur et agent ;
+- gestion des étudiants, professeurs et cartes QR ;
+- contrôle d’accès (entrée, sortie au second scan, poste de laboratoire ou PC personnel) ;
+- suivi de l’état des postes et libération automatique ;
+- réservations avec détection des conflits ;
+- tableau de bord et historique des sessions.
+
+### Démarrer l’application
+
+```bash
+node backend/server.js
+```
+
+Ouvrir ensuite `http://localhost:3000`.
+
+Comptes de démonstration :
+
+| Rôle | E-mail | Mot de passe |
+| --- | --- | --- |
+| Administrateur | `admin@labaccess.local` | `admin123` |
+| Agent de sécurité | `agent@labaccess.local` | `agent123` |
+
+Les données de démonstration sont enregistrées localement dans `backend/data/labaccess.json` à la première exécution. Supprimer ce fichier réinitialise la démonstration.
+
+### Vérifications
+
+```bash
+node --test backend/tests/api.test.js
+```
+
 ## Installation
 
 ### Prérequis

@@ -1,149 +1,61 @@
-// Main JavaScript - LabAccess
+(() => {
+  'use strict';
+  const api = '/api';
+  const state = { token: localStorage.getItem('labaccess_token'), user: JSON.parse(localStorage.getItem('labaccess_user') || 'null'), page: 'dashboard', draftPhoto: null };
+  const $ = (s, root = document) => root.querySelector(s);
+  const esc = (v = '') => String(v).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+  const labels = { student:'Étudiant·e', professor:'Professeur·e', active:'Active', inactive:'Inactive', blocked:'Bloquée', lost:'Perdue', available:'Disponible', occupied:'Occupé', maintenance:'Maintenance', out_of_service:'Hors service', confirmed:'Confirmée', cancelled:'Annulée', completed:'Terminée' };
+  const formatDate = d => d ? new Intl.DateTimeFormat('fr-FR',{dateStyle:'medium',timeStyle:'short'}).format(new Date(d)) : '—';
+  const badge = v => `<span class="badge badge-${String(v).replaceAll('_','-')}">${labels[v] || esc(v)}</span>`;
+  const name = p => p ? `${p.firstName} ${p.lastName}` : '—';
 
-// Configuration de l'API
-const API_BASE_URL = 'http://localhost:3000/api';
-
-// État global de l'application
-const AppState = {
-  user: null,
-  token: null,
-  role: null
-};
-
-// Initialisation
-document.addEventListener('DOMContentLoaded', () => {
-  // Charger l'utilisateur depuis le localStorage
-  const savedUser = localStorage.getItem('user');
-  const savedToken = localStorage.getItem('token');
-  
-  if (savedUser && savedToken) {
-    AppState.user = JSON.parse(savedUser);
-    AppState.token = savedToken;
-    AppState.role = AppState.user.role;
+  async function request(path, options = {}) {
+    const r = await fetch(api + path, { ...options, headers: { 'Content-Type':'application/json', ...(state.token ? {Authorization:`Bearer ${state.token}`} : {}), ...(options.headers || {}) } });
+    const payload = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(payload.message || 'Une erreur est survenue.');
+    return payload.data;
   }
-
-  // Rediriger selon l'état
-  handleRouting();
-});
-
-// Gestion du routage
-function handleRouting() {
-  const currentPath = window.location.pathname;
-  
-  if (!AppState.token) {
-    // Non authentifié → Rediriger vers login
-    if (currentPath !== '/pages/auth/login.html') {
-      window.location.href = '/pages/auth/login.html';
-    }
-  } else {
-    // Authentifié → Rediriger selon le rôle
-    if (currentPath === '/pages/auth/login.html') {
-      if (AppState.role === 'admin') {
-        window.location.href = '/pages/admin/dashboard.html';
-      } else if (AppState.role === 'agent') {
-        window.location.href = '/pages/agent/dashboard.html';
-      }
-    }
+  function toast(message, type = 'success') { const el = document.createElement('div'); el.className = `toast ${type}`; el.textContent = message; $('#toasts').append(el); setTimeout(() => el.remove(), 4500); }
+  const nav = (page, text, icon) => `<button class="nav-item ${state.page===page?'active':''}" data-page="${page}"><span>${icon}</span>${text}</button>`;
+  function title() { return ({dashboard:'Tableau de bord',scan:'Contrôle d’accès',sessions:'Sessions et historique',computers:'Postes informatiques',reservations:'Réservations',people:'Personnes',cards:'Cartes QR'})[state.page]; }
+  function appShell(content) {
+    const admin = state.user.role === 'admin';
+    return `<div class="layout"><aside class="sidebar"><a class="brand" href="#"><span class="brand-mark">LA</span><span>Lab<span>Access</span></span></a><p class="section-label">Opérations</p>${nav('dashboard','Tableau de bord','▦')}${nav('scan','Scanner un accès','⌁')}${nav('sessions','Sessions','◷')}${nav('computers','Postes','▣')}${nav('reservations','Réservations','▤')}${admin?`<p class="section-label">Administration</p>${nav('people','Personnes','♙')}${nav('cards','Cartes QR','▤')}`:''}<div class="sidebar-bottom"><div class="profile"><span class="avatar">${esc(state.user.name[0])}</span><span><strong>${esc(state.user.name)}</strong><small>${admin?'Administrateur':'Agent de sécurité'}</small></span></div><button id="logout" class="nav-item logout">↪ Déconnexion</button></div></aside><main class="main"><header class="topbar"><button id="menu-toggle" class="mobile-menu">☰</button><div><p class="eyebrow">${admin?'Administration':'Poste de contrôle'}</p><h1>${title()}</h1></div><div class="live"><i></i>Système opérationnel</div></header><section class="page">${content}</section></main></div>`;
   }
-}
-
-// Fonction API générique
-async function apiCall(endpoint, options = {}) {
-  const url = `${API_BASE_URL}${endpoint}`;
-  
-  const defaultOptions = {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(AppState.token && { 'Authorization': `Bearer ${AppState.token}` })
-    }
+  function loginPage() { return `<main class="login-page"><section class="login-intro"><a class="brand" href="#"><span class="brand-mark">LA</span><span>Lab<span>Access</span></span></a><div><p class="eyebrow">Gestion universitaire</p><h1>Un accès simple.<br><em>Un laboratoire sûr.</em></h1><p>Centralisez le contrôle des entrées, les postes et les réservations de vos espaces informatiques.</p></div><div class="intro-note"><span>✓</span> Suivi des accès en temps réel</div></section><section class="login-panel"><form id="login-form" class="login-form"><p class="eyebrow">Bienvenue</p><h2>Connectez-vous</h2><p class="muted">Accédez à votre espace de travail.</p><label>Adresse e-mail<input required name="email" type="email" value="admin@labaccess.local"></label><label>Mot de passe<input required name="password" type="password" value="admin123"></label><button class="button primary" type="submit">Se connecter <span>→</span></button><div class="demo-accounts"><strong>Comptes de démonstration</strong><button type="button" data-demo="admin">Administrateur</button><button type="button" data-demo="agent">Agent de sécurité</button></div></form></section></main>`; }
+  async function dashboard() { const d = await request('/dashboard'); return `<div class="hero"><div><p class="eyebrow">Vue d’ensemble</p><h2>Bonjour, ${esc(state.user.name.split(' ')[0])}.</h2><p>Voici la situation de vos laboratoires aujourd’hui.</p></div><button class="button primary" data-page="scan">⌁ Scanner une carte</button></div><div class="metrics"><article><span class="metric-icon blue">◉</span><div><strong>${d.activeSessions}</strong><small>Personnes présentes</small></div></article><article><span class="metric-icon green">▣</span><div><strong>${d.availableComputers}<small> / ${d.totalComputers}</small></strong><small>Postes disponibles</small></div></article><article><span class="metric-icon violet">♙</span><div><strong>${d.people}</strong><small>Personnes enregistrées</small></div></article><article><span class="metric-icon amber">▤</span><div><strong>${d.reservations}</strong><small>Réservations actives</small></div></article></div><div class="grid-two"><article class="panel"><div class="panel-head"><div><h3>Présences en cours</h3><p>${d.activeSessions} accès actuellement ouverts</p></div><button class="text-button" data-page="sessions">Voir tout</button></div>${d.active.length?`<div class="list">${d.active.map(s=>`<div class="list-row"><span class="avatar soft">${esc(s.person.name[0])}</span><div><strong>${esc(s.person.name)}</strong><small>${esc(s.room.name)} · ${s.computer?esc(s.computer.code):'PC personnel'}</small></div><time>${formatDate(s.entryAt)}</time></div>`).join('')}</div>`:`<div class="empty compact">Aucune personne n’est actuellement dans le laboratoire.</div>`}</article><article class="panel"><div class="panel-head"><div><h3>Dernières activités</h3><p>Sessions les plus récentes</p></div></div>${d.recentSessions.length?`<div class="list">${d.recentSessions.map(s=>`<div class="list-row"><span class="activity-dot ${s.status}"></span><div><strong>${esc(s.person.name)}</strong><small>${s.status==='active'?'Entrée':'Session terminée'} · ${esc(s.room.name)}</small></div><time>${formatDate(s.entryAt)}</time></div>`).join('')}</div>`:`<div class="empty compact">Les prochaines activités apparaîtront ici.</div>`}</article></div>`; }
+  async function scanner() { const [rooms, pcs] = await Promise.all([request('/rooms'),request('/computers')]); return `<div class="scan-layout"><section class="panel scanner-card"><div class="scan-symbol">⌁</div><p class="eyebrow">Lecture manuelle ou scanner USB</p><h2>Présentez une carte</h2><p class="muted">Saisissez l’identifiant QR ou utilisez votre lecteur USB. Un second scan enregistre automatiquement la sortie.</p><form id="scan-form"><label>Identifiant QR<input name="qr" autocomplete="off" placeholder="LAB-STU-2026-00001" autofocus required></label><div class="form-grid"><label>Salle<select name="roomId">${rooms.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join('')}</select></label><label>Poste utilisé<select name="computerId"><option value="private">PC personnel</option>${pcs.filter(c=>c.status==='available').map(c=>`<option value="${c.id}">${esc(c.code)} — ${esc(c.room.name)}</option>`).join('')}</select></label></div><button class="button primary wide">Valider le scan <span>→</span></button></form><div class="qr-examples"><span>Essayer :</span><button data-qr="LAB-STU-2026-00001">Amina</button><button data-qr="LAB-STU-2026-00002">David</button><button data-qr="LAB-PRF-2026-00003">Pr. Ilunga</button></div></section><aside class="scan-help"><article><span class="help-icon">1</span><h3>Scanner la carte</h3><p>Le QR Code identifie automatiquement son titulaire.</p></article><article><span class="help-icon">2</span><h3>Attribuer un poste</h3><p>Choisissez un poste disponible ou l’option PC personnel.</p></article><article><span class="help-icon">3</span><h3>Enregistrer la sortie</h3><p>Le second scan libère le poste et clôture la session.</p></article><p class="format-hint">Format attendu<br><code>LAB-STU-2026-00001</code></p></aside></div><div id="scan-result"></div>`; }
+  async function sessions() { const list = await request('/sessions'); return `<div class="toolbar"><div><h2>Historique des accès</h2><p class="muted">${list.length} session(s) enregistrée(s)</p></div></div><article class="panel table-panel">${list.length?`<div class="table-scroll"><table><thead><tr><th>Personne</th><th>Salle</th><th>Poste</th><th>Entrée</th><th>Sortie</th><th>État</th></tr></thead><tbody>${list.map(s=>`<tr><td><strong>${esc(s.person.name)}</strong><small>${esc(s.person.matricule)}</small></td><td>${esc(s.room.name)}</td><td>${s.computer?esc(s.computer.code):'Personnel'}</td><td>${formatDate(s.entryAt)}</td><td>${formatDate(s.exitAt)}</td><td>${badge(s.status)}</td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">Aucune session enregistrée pour le moment.</div>`}</article>`; }
+  async function computers() { const list = await request('/computers'); return `<div class="toolbar"><div><h2>État des postes</h2><p class="muted">Les postes occupés sont libérés automatiquement à la sortie.</p></div><div class="legend">${badge('available')}${badge('occupied')}${badge('maintenance')}</div></div><div class="computer-grid">${list.map(c=>`<article class="computer ${c.status}"><div><span class="computer-icon">▣</span>${badge(c.status)}</div><strong>${esc(c.code)}</strong><p>${esc(c.name)}</p><small>${esc(c.room.name)}</small>${state.user.role==='admin'&&c.status!=='occupied'?`<select class="computer-status" data-id="${c.id}"><option value="available" ${c.status==='available'?'selected':''}>Disponible</option><option value="maintenance" ${c.status==='maintenance'?'selected':''}>Maintenance</option><option value="out_of_service" ${c.status==='out_of_service'?'selected':''}>Hors service</option></select>`:''}</article>`).join('')}</div>`; }
+  async function reservations() { const [list,people,rooms] = await Promise.all([request('/reservations'),request('/people'),request('/rooms')]); const professors=people.filter(p=>p.type==='professor'); return `<div class="grid-two reservation-layout"><article class="panel"><div class="panel-head"><div><h2>Nouvelle réservation</h2><p>La disponibilité est vérifiée automatiquement.</p></div></div><form id="reservation-form" class="stack-form"><label>Professeur<select required name="professorId"><option value="">Sélectionner</option>${professors.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label><label>Salle<select required name="roomId">${rooms.map(r=>`<option value="${r.id}">${esc(r.name)} (${esc(r.code)})</option>`).join('')}</select></label><div class="form-grid"><label>Date<input required name="date" type="date" value="${new Date().toISOString().slice(0,10)}"></label><label>Début<input required name="startTime" type="time" value="08:00"></label></div><label>Fin<input required name="endTime" type="time" value="10:00"></label><label>Motif<textarea name="purpose" placeholder="Ex. Cours de programmation avancée"></textarea></label><button class="button primary">Confirmer la réservation</button></form></article><article class="panel"><div class="panel-head"><div><h2>Planning</h2><p>${list.length} réservation(s)</p></div></div>${list.length?`<div class="list reservation-list">${list.map(r=>`<div class="list-row"><span class="date-box"><strong>${esc(r.date.slice(8))}</strong><small>${new Intl.DateTimeFormat('fr-FR',{month:'short'}).format(new Date(r.date))}</small></span><div><strong>${esc(r.room.name)}</strong><small>${esc(r.professor.name)} · ${r.startTime}–${r.endTime}</small>${r.purpose?`<small>${esc(r.purpose)}</small>`:''}</div><div>${badge(r.status)}${r.status==='confirmed'?`<button class="icon-button cancel-reservation" data-id="${r.id}">×</button>`:''}</div></div>`).join('')}</div>`:`<div class="empty compact">Aucune réservation à afficher.</div>`}</article></div>`; }
+  function personModal() { return `<dialog id="person-modal"><form id="person-form" class="person-form"><div class="modal-head"><div><p class="eyebrow">Nouveau titulaire</p><h2>Créer une carte d’accès</h2><p>Les informations seront imprimées sur la carte QR.</p></div><button type="button" class="icon-button" data-close-modal aria-label="Fermer">×</button></div><div class="photo-upload"><div id="photo-preview" class="photo-preview"><span>Photo</span></div><div><strong>Photo du titulaire</strong><small>JPG ou PNG · cadrée automatiquement</small><label class="photo-file-button">Choisir une photo<input id="person-photo" name="photo" type="file" accept="image/png,image/jpeg" hidden></label></div></div><div class="form-section"><span>Informations personnelles</span></div><div class="form-grid"><label>Type<select name="type"><option value="student">Étudiant·e</option><option value="professor">Professeur·e</option></select></label><label>Matricule<input name="matricule" required placeholder="Ex. 2023021048"></label></div><div class="form-grid"><label>Prénom<input name="firstName" required placeholder="Sarah"></label><label>Nom<input name="lastName" required placeholder="Mukendi"></label></div><label>E-mail<input name="email" type="email" placeholder="sarah.mukendi@universite.edu"></label><div class="form-grid"><label>Faculté<input name="faculty" placeholder="Informatique"></label><label>Promotion / Département<input name="promotion" placeholder="L1 ou département"></label></div><button class="button primary wide">Créer la personne et sa carte <span>→</span></button></form></dialog>`; }
+  async function people() { const list = await request('/people'); return `<div class="toolbar"><div><h2>Étudiants et professeurs</h2><p class="muted">Gérez les titulaires de cartes d’accès.</p></div><button id="open-person" class="button primary">＋ Ajouter une personne</button></div><article class="panel table-panel"><div class="table-scroll"><table><thead><tr><th>Personne</th><th>Type</th><th>Matricule</th><th>Filière / Département</th><th>Carte</th><th>État</th></tr></thead><tbody>${list.map(p=>`<tr><td><strong>${esc(p.name)}</strong><small>${esc(p.email)}</small></td><td>${badge(p.type)}</td><td>${esc(p.matricule)}</td><td>${esc(p.type==='student'?`${p.faculty||'—'} ${p.promotion?'· '+p.promotion:''}`:p.department||'—')}</td><td><code>${esc(p.card?.qr||'—')}</code></td><td><button class="toggle-person ${p.active?'on':''}" data-id="${p.id}"><span></span>${p.active?'Actif':'Inactif'}</button></td></tr>`).join('')}</tbody></table></div></article>${personModal()}`; }
+  async function cards() { const list = await request('/cards'); return `<div class="toolbar"><div><h2>Cartes QR</h2><p class="muted">Créez, imprimez ou bloquez les cartes d’accès.</p></div><button id="open-card-creator" class="button primary">＋ Créer une carte</button></div><article class="panel table-panel"><div class="table-scroll"><table><thead><tr><th>Titulaire</th><th>Identifiant QR</th><th>Type</th><th>Date d’émission</th><th>Statut</th><th></th></tr></thead><tbody>${list.map(c=>`<tr><td><strong>${esc(c.person.name)}</strong><small>${esc(c.person.matricule)}</small></td><td><code>${esc(c.qr)}</code></td><td>${badge(c.person.type)}</td><td>${esc(c.issuedAt)}</td><td><select class="card-status" data-id="${c.id}"><option value="active" ${c.status==='active'?'selected':''}>Active</option><option value="inactive" ${c.status==='inactive'?'selected':''}>Inactive</option><option value="blocked" ${c.status==='blocked'?'selected':''}>Bloquée</option><option value="lost" ${c.status==='lost'?'selected':''}>Perdue</option></select></td><td><button class="print-card" data-card='${esc(JSON.stringify(c))}'>▣ Imprimer</button></td></tr>`).join('')}</tbody></table></div></article>${personModal()}`; }
+  async function render() { try { if (!state.user) { $('#app').innerHTML=loginPage(); return bindLogin(); } const views={dashboard,scan:scanner,sessions,computers,reservations,people,cards}; $('#app').innerHTML=appShell(await views[state.page]()); bindApp(); } catch(e) { if (/Authentification/.test(e.message)) return logout(); $('#app').innerHTML=`<div class="fatal"><h1>LabAccess</h1><p>${esc(e.message)}</p><button class="button primary" onclick="location.reload()">Réessayer</button></div>`; } }
+  function bindLogin() { $('#login-form').addEventListener('submit',async e=>{e.preventDefault();try { const data=await request('/auth/login',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(e.currentTarget)))}); state.token=data.token;state.user=data.user;localStorage.setItem('labaccess_token',data.token);localStorage.setItem('labaccess_user',JSON.stringify(data.user));await render();toast(`Bienvenue, ${state.user.name}.`);}catch(err){toast(err.message,'error');}}); document.querySelectorAll('[data-demo]').forEach(b=>b.addEventListener('click',()=>{const agent=b.dataset.demo==='agent';$('[name=email]').value=agent?'agent@labaccess.local':'admin@labaccess.local';$('[name=password]').value=agent?'agent123':'admin123';})); }
+  function bindApp() { document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>{state.page=b.dataset.page;render();})); $('#logout')?.addEventListener('click',logout); $('#menu-toggle')?.addEventListener('click',()=>$('.sidebar').classList.toggle('open')); $('#scan-form')?.addEventListener('submit',submitScan); document.querySelectorAll('[data-qr]').forEach(b=>b.addEventListener('click',()=>{$('[name=qr]').value=b.dataset.qr;$('[name=qr]').focus();})); $('#reservation-form')?.addEventListener('submit',submitReservation); $('#open-person')?.addEventListener('click',()=>$('#person-modal').showModal()); $('#open-card-creator')?.addEventListener('click',()=>$('#person-modal').showModal()); $('[data-close-modal]')?.addEventListener('click',()=>$('#person-modal').close()); $('#person-form')?.addEventListener('submit',submitPerson); document.querySelectorAll('.toggle-person').forEach(b=>b.addEventListener('click',()=>changePerson(b))); document.querySelectorAll('.card-status').forEach(s=>s.addEventListener('change',()=>changeCard(s))); document.querySelectorAll('.computer-status').forEach(s=>s.addEventListener('change',()=>changeComputer(s))); document.querySelectorAll('.cancel-reservation').forEach(b=>b.addEventListener('click',()=>cancelReservation(b))); document.querySelectorAll('.print-card').forEach(b=>b.addEventListener('click',()=>printCard(JSON.parse(b.dataset.card)))); }
+  async function submitScan(e){e.preventDefault();try{const result=await request('/scans',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(e.currentTarget)))}),s=result.session;$('#scan-result').innerHTML=`<article class="scan-result ${result.action}"><span>${result.action==='entry'?'✓':'↗'}</span><div><strong>${esc(result.message)}</strong><p>${esc(s.room.name)} · ${s.computer?esc(s.computer.code):'PC personnel'} · ${formatDate(s.entryAt)}</p></div></article>`;e.currentTarget.reset();toast(result.message);}catch(err){$('#scan-result').innerHTML=`<article class="scan-result error"><span>!</span><div><strong>Accès refusé</strong><p>${esc(err.message)}</p></div></article>`;toast(err.message,'error');}}
+  async function submitReservation(e){e.preventDefault();try{await request('/reservations',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(e.currentTarget)))});toast('Réservation confirmée.');render();}catch(err){toast(err.message,'error');}}
+  async function submitPerson(e){e.preventDefault();try{const data=Object.fromEntries(new FormData(e.currentTarget));delete data.photo;data.photoData=state.draftPhoto;const p=await request('/people',{method:'POST',body:JSON.stringify(data)});state.draftPhoto=null;$('#person-modal').close();toast(`Carte ${p.card.qr} créée pour ${name(p)}.`);render();}catch(err){toast(err.message,'error');}}
+  async function changePerson(b){try{await request(`/people/${b.dataset.id}`,{method:'PATCH',body:JSON.stringify({active:!b.classList.contains('on')})});toast('Statut mis à jour.');render();}catch(e){toast(e.message,'error');}}
+  async function changeCard(s){try{await request(`/cards/${s.dataset.id}`,{method:'PATCH',body:JSON.stringify({status:s.value})});toast('Statut de la carte mis à jour.');render();}catch(e){toast(e.message,'error');}}
+  async function loadPhoto(input){const file=input.files?.[0];if(!file)return;if(!['image/jpeg','image/png'].includes(file.type))return toast('Choisissez une image JPG ou PNG.','error');if(file.size>5*1024*1024)return toast('La photo ne doit pas dépasser 5 Mo.','error');try{state.draftPhoto=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onerror=reject;reader.onload=()=>{const image=new Image();image.onerror=reject;image.onload=()=>{const size=360,side=Math.min(image.naturalWidth,image.naturalHeight),canvas=document.createElement('canvas'),context=canvas.getContext('2d');canvas.width=size;canvas.height=size;context.drawImage(image,(image.naturalWidth-side)/2,(image.naturalHeight-side)/2,side,side,0,0,size,size);resolve(canvas.toDataURL('image/jpeg',.84));};image.src=reader.result;};reader.readAsDataURL(file);});$('#photo-preview').innerHTML=`<img src="${state.draftPhoto}" alt="Aperçu de la photo">`;$('#photo-preview').classList.add('has-photo');}catch(_){toast('La photo ne peut pas être lue.','error');}}
+  function printCard(card) { const person = card.person; const type = person.type === 'professor' ? 'CARTE DE PROFESSEUR' : "CARTE D'ÉTUDIANT"; const qr = `https://api.qrserver.com/v1/create-qr-code/?format=svg&size=185x185&data=${encodeURIComponent(card.qr)}`; const popup = window.open('', '_blank', 'width=760,height=560'); if (!popup) return toast('Autorisez les fenêtres contextuelles pour imprimer la carte.', 'error'); popup.onload = () => setTimeout(() => popup.print(), 350); popup.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(type)} — ${esc(person.name)}</title><style>@page{size:86mm 54mm;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:#101b32}.card{position:relative;width:86mm;height:54mm;overflow:hidden;border:1px solid #d4dceb;border-radius:2mm;background:#fff}.head,.foot{height:11mm;display:flex;align-items:center;justify-content:center;background:#102654;color:#fff;font-weight:800;letter-spacing:.25mm;text-align:center}.head{font-size:4.2mm;line-height:1.08;border-bottom:.7mm solid #ed2939}.foot{position:absolute;bottom:0;width:100%;height:8.5mm;border-top:.7mm solid #ed2939;font-size:3.4mm;letter-spacing:.7mm}.body{height:34.5mm;display:grid;grid-template-columns:28mm 27mm 1fr;align-items:center;padding:3mm 3mm 1mm}.identity{align-self:start;font-weight:800;font-size:5.5mm;line-height:1.02;word-break:break-word}.matricule{margin-top:3mm;font-size:3.6mm;letter-spacing:.25mm}.qr{position:absolute;left:4mm;bottom:10mm;width:17mm;height:17mm}.watermark{width:25mm;height:25mm;border:1mm solid #dce3f3;border-radius:50%;display:grid;place-items:center;text-align:center;color:#cfd8ec;font-weight:800;font-size:3.5mm;line-height:1.05;opacity:.65}.watermark:after{content:'UPL';display:block;font-size:5mm}.photo{height:28mm;border:.5mm solid #d8e0eb;background:#f1f4f8;display:grid;place-items:center;color:#68758d;font-weight:800;font-size:8mm}.code{position:absolute;right:4mm;bottom:9.5mm;color:#526075;font-size:1.8mm}@media print{body{width:86mm;height:54mm}}</style></head><body><article class="card"><header class="head">UNIVERSITÉ PROTESTANTE<br>DE LUBUMBASHI</header><section class="body"><div class="identity">${esc(person.lastName)}<br>${esc(person.firstName)}<div class="matricule">${esc(person.matricule)}</div></div><div class="watermark">VÉRITÉ ET LIBERTÉ</div><div class="photo">${esc((person.firstName[0] || '') + (person.lastName[0] || ''))}</div></section><img class="qr" src="${qr}" alt="QR Code ${esc(card.qr)}"><span class="code">${esc(card.qr)}</span><footer class="foot">${type}</footer></article></body></html>`); popup.document.close(); }
+  async function changeComputer(s){try{await request(`/computers/${s.dataset.id}`,{method:'PATCH',body:JSON.stringify({status:s.value})});toast('Statut du poste mis à jour.');render();}catch(e){toast(e.message,'error');}}
+  async function cancelReservation(b){try{await request(`/reservations/${b.dataset.id}`,{method:'PATCH',body:JSON.stringify({status:'cancelled'})});toast('Réservation annulée.');render();}catch(e){toast(e.message,'error');}}
+  async function logout(){try{if(state.token)await request('/auth/logout',{method:'POST'});}catch(_){}state.token=null;state.user=null;localStorage.removeItem('labaccess_token');localStorage.removeItem('labaccess_user');render();}
+  // Version imprimable avec photo : redéfinie ici pour conserver la compatibilité des cartes existantes.
+  printCard = function(card) {
+    const person = card.person, professor = person.type === 'professor';
+    const type = professor ? 'CARTE DE PROFESSEUR' : "CARTE D'ÉTUDIANT";
+    const qr = `https://api.qrserver.com/v1/create-qr-code/?format=svg&size=185x185&data=${encodeURIComponent(card.qr)}`;
+    const photo = person.photoData ? `<img class="photo" src="${person.photoData}" alt="Photo de ${esc(person.name)}">` : `<div class="photo initials">${esc((person.firstName[0] || '') + (person.lastName[0] || ''))}</div>`;
+    const popup = window.open('', '_blank', 'width=760,height=560');
+    if (!popup) return toast('Autorisez les fenêtres contextuelles pour imprimer la carte.', 'error');
+    popup.onload = () => setTimeout(() => popup.print(), 350);
+    popup.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(type)} — ${esc(person.name)}</title><style>@page{size:86mm 54mm;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:#101a31}.card{position:relative;width:86mm;height:54mm;overflow:hidden;border:.25mm solid #d3dae6;border-radius:1.8mm;background:#fff}.head,.foot{display:flex;align-items:center;justify-content:center;background:#102654;color:#fff;font-weight:800;text-align:center}.head{height:11mm;border-bottom:.65mm solid #ed2939;font-size:4.2mm;line-height:1.08;letter-spacing:.2mm}.foot{position:absolute;bottom:0;width:100%;height:7.5mm;border-top:.65mm solid #ed2939;font-size:3.4mm;letter-spacing:.72mm}.body{height:35.5mm;display:grid;grid-template-columns:28mm 27mm 1fr;align-items:center;padding:2mm 3mm}.identity{align-self:start;font-size:5.5mm;font-weight:800;line-height:1.02}.matricule{margin-top:3mm;font-size:3.6mm;letter-spacing:.2mm}.seal{width:28mm;height:28mm;border:1mm solid #dce4f4;border-radius:50%;display:grid;place-items:center;text-align:center;color:#cad5eb;opacity:.72;font-size:3mm;font-weight:800;line-height:1.1}.seal b{display:block;font-size:6mm}.photo{width:25mm;height:31mm;object-fit:cover;border:.5mm solid #d7e0eb;background:#f1f4f8}.initials{display:grid;place-items:center;color:#68758d;font-size:8mm;font-weight:800}.qr{position:absolute;left:4mm;bottom:7.6mm;width:17mm;height:17mm}.code{position:absolute;right:4mm;bottom:8.1mm;color:#526075;font-size:1.6mm}@media print{body{width:86mm;height:54mm}}</style></head><body><article class="card"><header class="head">UNIVERSITÉ PROTESTANTE<br>DE LUBUMBASHI</header><section class="body"><div class="identity">${esc(person.lastName)}<br>${esc(person.firstName)}<div class="matricule">${esc(person.matricule)}</div></div><div class="seal">VÉRITÉ ET LIBERTÉ<b>UPL</b></div>${photo}</section><img class="qr" src="${qr}" alt="QR Code ${esc(card.qr)}"><span class="code">${esc(card.qr)}</span><footer class="foot">${type}</footer></article></body></html>`);
+    popup.document.close();
   };
-  
-  const finalOptions = { ...defaultOptions, ...options };
-  
-  try {
-    const response = await fetch(url, finalOptions);
-    const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(data.message || 'Erreur API');
-    }
-    
-    return data;
-  } catch (error) {
-    console.error('API Error:', error);
-    throw error;
-  }
-}
-
-// Fonctions d'authentification
-async function login(email, password) {
-  const data = await apiCall('/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ email, password })
-  });
-  
-  AppState.user = data.user;
-  AppState.token = data.token;
-  AppState.role = data.user.role;
-  
-  localStorage.setItem('user', JSON.stringify(data.user));
-  localStorage.setItem('token', data.token);
-  
-  return data;
-}
-
-function logout() {
-  AppState.user = null;
-  AppState.token = null;
-  AppState.role = null;
-  
-  localStorage.removeItem('user');
-  localStorage.removeItem('token');
-  
-  window.location.href = '/pages/auth/login.html';
-}
-
-// Fonctions utilitaires
-function showNotification(message, type = 'info') {
-  const notification = document.createElement('div');
-  notification.className = `notification notification-${type}`;
-  notification.textContent = message;
-  
-  const container = document.querySelector('.notifications') || document.body;
-  container.appendChild(notification);
-  
-  setTimeout(() => {
-    notification.remove();
-  }, 5000);
-}
-
-function formatDate(date) {
-  return new Date(date).toLocaleDateString('fr-FR', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-}
-
-function formatDuration(minutes) {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  
-  if (hours > 0) {
-    return `${hours}h ${mins}min`;
-  }
-  return `${mins}min`;
-}
-
-// Exporter pour utilisation dans d'autres modules
-window.LabAccess = {
-  AppState,
-  apiCall,
-  login,
-  logout,
-  showNotification,
-  formatDate,
-  formatDuration
-};
+  document.addEventListener('change', event => { if (event.target.id === 'person-photo') loadPhoto(event.target); });
+  render();
+})();
