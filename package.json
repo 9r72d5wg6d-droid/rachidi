@@ -1,0 +1,11 @@
+{
+  "name": "labaccess",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MVP autonome de gestion des accès aux laboratoires",
+  "scripts": {
+    "start": "node backend/server.js",
+    "test": "node --test backend/tests/api.test.js"
+  },
+  "engines": { "node": ">=20" }
+}
