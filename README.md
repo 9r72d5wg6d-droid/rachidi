@@ -248,6 +248,18 @@ Le projet inclut maintenant une version MVP autonome, utilisable sans installer 
 node backend/server.js
 ```
 
+Après un `git clone` ou un `git pull`, lancez cette commande depuis la racine du projet. Le MVP ne requiert ni `npm install`, ni base de données, ni fichier `.env` : il faut seulement Node.js 20 ou une version plus récente (`node --version`).
+
+Sous Windows PowerShell, utilisez directement `node backend/server.js`. Si `npm start` affiche une erreur indiquant que `npm.ps1` ne peut pas être chargé, c'est une politique PowerShell, pas une erreur du projet. Vous pouvez aussi lancer `npm.cmd start`.
+
+Si le port 3000 est déjà utilisé :
+
+```powershell
+$env:PORT=3001; node backend/server.js
+```
+
+Puis ouvrez `http://localhost:3001`.
+
 Ouvrir ensuite `http://localhost:3000`.
 
 Comptes de démonstration :
@@ -265,7 +277,9 @@ Les données de démonstration sont enregistrées localement dans `backend/data/
 node --test backend/tests/api.test.js
 ```
 
-## Installation
+## Documentation d'architecture (non nécessaire pour le MVP)
+
+> La procédure ci-dessous décrit des pistes pour une future version avec base de données. Ne l'appliquez pas pour démarrer le MVP actuel : utilisez `node backend/server.js` comme indiqué plus haut.
 
 ### Prérequis
 
