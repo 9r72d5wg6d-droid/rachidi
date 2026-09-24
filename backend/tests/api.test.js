@@ -88,6 +88,15 @@ test('le deuxième scan termine une session et libère le workflow', async () =>
   assert.equal(second.response.status, 200);
   assert.equal(second.result.data.action, 'exit');
   assert.equal(second.result.data.session.status, 'completed');
+  assert.ok(second.result.data.session.exitAt);
+  assert.equal(typeof second.result.data.session.durationMinutes, 'number');
+  const sessions = await fetch(`${baseUrl}/api/sessions`, { headers: { Authorization: `Bearer ${token}` } }).then(response => response.json());
+  const stored = sessions.data.find(session => session.id === second.result.data.session.id);
+  assert.equal(stored.status, 'completed');
+  assert.ok(stored.exitAt);
+  const logs = await fetch(`${baseUrl}/api/access-logs`, { headers: { Authorization: `Bearer ${token}` } }).then(response => response.json());
+  const sessionLogs = logs.data.filter(log => log.sessionId === stored.id);
+  assert.deepEqual(sessionLogs.map(log => log.action).sort(), ['entry', 'exit']);
 });
 
 test('un poste attribué est occupé puis redevient disponible à la sortie', async () => {
