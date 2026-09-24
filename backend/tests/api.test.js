@@ -2,6 +2,7 @@
 
 const { before, after, test } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const { server } = require('../server');
 
 let baseUrl;
@@ -26,6 +27,34 @@ test('authentifie le compte administrateur de démonstration', async () => {
   const result = await response.json();
   assert.equal(response.status, 200);
   assert.equal(result.data.role, 'admin');
+  assert.ok(result.data.permissions.includes('people:manage'));
+});
+
+test('authentifie un agent avec ses permissions opérationnelles', async () => {
+  const response = await fetch(`${baseUrl}/api/auth/login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'agent@labaccess.local', password: 'agent123' })
+  });
+  const result = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(result.data.user.role, 'agent');
+  assert.ok(result.data.user.permissions.includes('scans:create'));
+  assert.ok(!result.data.user.permissions.includes('people:manage'));
+  const forbidden = await fetch(`${baseUrl}/api/people`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${result.data.token}` },
+    body: JSON.stringify({ type: 'student' })
+  });
+  assert.equal(forbidden.status, 403);
+});
+
+test('refuse des identifiants invalides et ne persiste pas de mot de passe brut', async () => {
+  const response = await fetch(`${baseUrl}/api/auth/login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'admin@labaccess.local', password: 'incorrect' })
+  });
+  assert.equal(response.status, 401);
+  const data = JSON.parse(fs.readFileSync(require('node:path').join(__dirname, '..', 'data', 'labaccess.json'), 'utf8'));
+  assert.ok(data.users.every(user => user.password_hash?.startsWith('scrypt$') && !user.password));
 });
 
 test('expose les données nécessaires au contrôle d’accès', async () => {
