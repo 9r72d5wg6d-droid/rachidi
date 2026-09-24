@@ -76,3 +76,55 @@ test('un poste attribué est occupé puis redevient disponible à la sortie', as
   computers = await fetch(`${baseUrl}/api/computers`, { headers }).then(response => response.json());
   assert.equal(computers.data.find(computer => computer.id === 'pc-01').status, 'available');
 });
+
+test('une réservation de professeur est créée avec statut pending puis rejetée en cas de conflit détaillé', async () => {
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+  const date = '2099-12-15';
+  const firstReservation = await fetch(`${baseUrl}/api/reservations`, {
+    method: 'POST', headers,
+    body: JSON.stringify({ professorId: 'p-003', roomId: 'r-lab', date, startTime: '09:00', endTime: '11:00', purpose: 'Séminaire IA' })
+  });
+  const firstResult = await firstReservation.json();
+  assert.equal(firstReservation.status, 201);
+  assert.equal(firstResult.data.status, 'pending');
+
+  const conflictingReservation = await fetch(`${baseUrl}/api/reservations`, {
+    method: 'POST', headers,
+    body: JSON.stringify({ professorId: 'p-003', roomId: 'r-lab', date, startTime: '10:00', endTime: '10:30', purpose: 'Cours de remplacement' })
+  });
+  const conflictResult = await conflictingReservation.json();
+  assert.equal(conflictingReservation.status, 409);
+  assert.match(conflictResult.message, /Conflit de réservation/i);
+  assert.match(conflictResult.message, /Laboratoire IA|09:00|11:00/);
+
+  const invalidTimeReservation = await fetch(`${baseUrl}/api/reservations`, {
+    method: 'POST', headers,
+    body: JSON.stringify({ professorId: 'p-003', roomId: 'r-aud', date, startTime: '12:00', endTime: '12:00', purpose: 'Heure invalide' })
+  });
+  const invalidTimeResult = await invalidTimeReservation.json();
+  assert.equal(invalidTimeReservation.status, 400);
+  assert.match(invalidTimeResult.message, /invalide|supérieure|postérieure/i);
+});
+
+test('une réservation existante peut être modifiée sans créer de conflit', async () => {
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+  const date = '2099-12-20';
+  const created = await fetch(`${baseUrl}/api/reservations`, {
+    method: 'POST', headers,
+    body: JSON.stringify({ professorId: 'p-003', roomId: 'r-lab', date, startTime: '14:00', endTime: '15:00', purpose: 'Cours initial' })
+  }).then(async response => ({ response, result: await response.json() }));
+
+  assert.equal(created.response.status, 201);
+  const id = created.result.data.id;
+
+  const updated = await fetch(`${baseUrl}/api/reservations/${id}`, {
+    method: 'PATCH', headers,
+    body: JSON.stringify({ roomId: 'r-aud', date, startTime: '16:00', endTime: '17:00', purpose: 'Cours modifié' })
+  }).then(async response => ({ response, result: await response.json() }));
+
+  assert.equal(updated.response.status, 200);
+  assert.equal(updated.result.data.roomId, 'r-aud');
+  assert.equal(updated.result.data.purpose, 'Cours modifié');
+  assert.equal(updated.result.data.startTime, '16:00');
+  assert.equal(updated.result.data.endTime, '17:00');
+});
