@@ -12,8 +12,8 @@ const DATA_FILE = path.join(__dirname, 'data', 'labaccess.json');
 const PORT = Number(process.env.PORT || 3000);
 const sessions = new Map();
 const ROLE_PERMISSIONS = {
-  admin: ['dashboard:read', 'people:read', 'people:manage', 'cards:read', 'cards:manage', 'rooms:read', 'computers:read', 'computers:manage', 'scans:create', 'sessions:read', 'reservations:read', 'reservations:manage'],
-  agent: ['dashboard:read', 'people:read', 'cards:read', 'rooms:read', 'computers:read', 'scans:create', 'sessions:read', 'reservations:read', 'reservations:manage']
+  admin: ['dashboard:read', 'people:read', 'people:manage', 'cards:read', 'cards:manage', 'rooms:read', 'computers:read', 'computers:manage', 'scans:create', 'sessions:read', 'logs:read', 'reservations:read', 'reservations:manage'],
+  agent: ['dashboard:read', 'people:read', 'cards:read', 'rooms:read', 'computers:read', 'scans:create', 'sessions:read', 'logs:read', 'reservations:read', 'reservations:manage']
 };
 
 function now() { return new Date().toISOString(); }
@@ -122,7 +122,7 @@ function scan(qr, roomId, requestedComputerId, user) {
   if (ongoing) {
     ongoing.status = 'completed'; ongoing.exitAt = now(); ongoing.durationMinutes = Math.max(0, Math.round((Date.parse(ongoing.exitAt) - Date.parse(ongoing.entryAt)) / 60000));
     if (ongoing.computerId) { const pc = db.computers.find(c => c.id === ongoing.computerId); if (pc && pc.status === 'occupied') pc.status = 'available'; }
-    db.logs.push({ id: id(), action: 'exit', personId: person.id, qr, at: now(), agentId: user.id }); save(db);
+    db.logs.push({ id: id(), sessionId: ongoing.id, action: 'exit', personId: person.id, qr, roomId: ongoing.roomId, computerId: ongoing.computerId, at: ongoing.exitAt, agentId: user.id }); save(db);
     return { action: 'exit', message: `Sortie enregistrée pour ${personName(person)}.`, session: enrichSession(ongoing) };
   }
   const room = db.rooms.find(r => r.id === roomId); if (!room) throw new Error('Salle invalide.');
@@ -130,7 +130,7 @@ function scan(qr, roomId, requestedComputerId, user) {
   let computerId = null;
   if (requestedComputerId !== 'private' && requestedComputerId) { const pc = db.computers.find(c => c.id === requestedComputerId && c.roomId === roomId); if (!pc || pc.status !== 'available') throw new Error('Ce poste n’est plus disponible.'); pc.status = 'occupied'; computerId = pc.id; }
   const entry = { id: id(), personId: person.id, roomId, computerId, computerType: computerId ? 'lab' : 'private', entryAt: now(), exitAt: null, durationMinutes: null, status: 'active', agentId: user.id };
-  db.accessSessions.push(entry); db.logs.push({ id: id(), action: 'entry', personId: person.id, qr, at: now(), agentId: user.id }); save(db);
+  db.accessSessions.push(entry); db.logs.push({ id: id(), sessionId: entry.id, action: 'entry', personId: person.id, qr, roomId: entry.roomId, computerId: entry.computerId, at: entry.entryAt, agentId: user.id }); save(db);
   return { action: 'entry', message: `Entrée autorisée pour ${personName(person)}.`, session: enrichSession(entry) };
 }
 function staticFile(req, res) {
@@ -170,6 +170,7 @@ const server = http.createServer(async (req, res) => {
     if (method === 'PATCH' && /^\/api\/computers\/[^/]+$/.test(route)) { if (!requirePermission(res, user, 'computers:manage')) return; const target = db.computers.find(c => c.id === route.split('/').pop()); const input = await body(req); if (!target) return error(res, 404, 'Poste introuvable.'); if (!['available','maintenance','out_of_service'].includes(input.status)) return error(res, 400, 'Statut invalide.'); if (target.status === 'occupied') return error(res, 409, 'Impossible de modifier un poste occupé.'); target.status = input.status; save(db); return respond(res, 200, { success: true, data: target }); }
     if (method === 'POST' && route === '/api/scans') { if (!requirePermission(res, user, 'scans:create')) return; const input = await body(req); try { return respond(res, 200, { success: true, data: scan(String(input.qr || '').trim().toUpperCase(), input.roomId, input.computerId || 'private', user) }); } catch (e) { db.logs.push({ id: id(), action: 'refused', qr: input.qr || '', at: now(), agentId: user.id, message: e.message }); save(db); return error(res, 400, e.message); } }
     if (method === 'GET' && route === '/api/sessions') { if (!requirePermission(res, user, 'sessions:read')) return; return respond(res, 200, { success: true, data: db.accessSessions.slice().reverse().map(enrichSession) }); }
+    if (method === 'GET' && route === '/api/access-logs') { if (!requirePermission(res, user, 'logs:read')) return; return respond(res, 200, { success: true, data: db.logs.slice().reverse() }); }
     if (method === 'GET' && route === '/api/reservations') { if (!requirePermission(res, user, 'reservations:read')) return; return respond(res, 200, { success: true, data: db.reservations.slice().reverse().map(r => ({ ...r, room: db.rooms.find(x => x.id === r.roomId), professor: findPerson(r.professorId) && { ...findPerson(r.professorId), name: personName(findPerson(r.professorId)) } })) }); }
     if (method === 'POST' && route === '/api/reservations') { if (!requirePermission(res, user, 'reservations:manage')) return; const input = await body(req); const professor = findPerson(input.professorId); const room = db.rooms.find(r => r.id === input.roomId); if (!professor || professor.type !== 'professor' || !room) return error(res, 400, 'Professeur ou salle invalide.'); if (!input.date || !input.startTime || !input.endTime || input.endTime <= input.startTime) return error(res, 400, 'La période de réservation est invalide.'); const conflict = db.reservations.find(r => r.roomId === input.roomId && r.date === input.date && r.status !== 'cancelled' && input.startTime < r.endTime && input.endTime > r.startTime); if (conflict) return error(res, 409, 'Conflit : cette salle est déjà réservée sur ce créneau.'); const reservation = { id: id(), roomId: room.id, professorId: professor.id, date: input.date, startTime: input.startTime, endTime: input.endTime, purpose: String(input.purpose || '').trim(), status: 'confirmed', createdAt: now() }; db.reservations.push(reservation); save(db); return respond(res, 201, { success: true, data: reservation }); }
     if (method === 'PATCH' && /^\/api\/reservations\/[^/]+$/.test(route)) { if (!requirePermission(res, user, 'reservations:manage')) return; const reservation = db.reservations.find(r => r.id === route.split('/').pop()); const input = await body(req); if (!reservation) return error(res, 404, 'Réservation introuvable.'); if (!['confirmed','cancelled','completed'].includes(input.status)) return error(res, 400, 'Statut invalide.'); reservation.status = input.status; save(db); return respond(res, 200, { success: true, data: reservation }); }
